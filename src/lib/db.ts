@@ -275,3 +275,268 @@ export async function reorderTasks(
     }
   }
 }
+
+// ─── Session helpers ──────────────────────────────────────────────────────────
+
+type SessionRow = {
+  id: string;
+  task_id: string | null;
+  started_at: string;
+  ended_at: string | null;
+  duration_minutes: number | null;
+  session_type: string;
+  notes: string | null;
+};
+
+export type Session = {
+  id: string;
+  taskId: string | null;
+  startedAt: string;
+  endedAt: string | null;
+  durationMinutes: number | null;
+  sessionType: "focus" | "break";
+  notes: string | null;
+};
+
+function rowToSession(row: SessionRow): Session {
+  return {
+    id: row.id,
+    taskId: row.task_id,
+    startedAt: row.started_at,
+    endedAt: row.ended_at,
+    durationMinutes: row.duration_minutes,
+    sessionType: row.session_type as "focus" | "break",
+    notes: row.notes,
+  };
+}
+
+export async function createSession(
+  id: string,
+  taskId: string | null,
+  sessionType: "focus" | "break",
+  startedAt: string
+): Promise<void> {
+  const db = await getDb();
+  await db.execute(
+    "INSERT INTO sessions (id, task_id, session_type, started_at) VALUES ($1, $2, $3, $4)",
+    [id, taskId, sessionType, startedAt]
+  );
+}
+
+export async function endSession(
+  id: string,
+  endedAt: string,
+  durationMinutes: number
+): Promise<void> {
+  const db = await getDb();
+  await db.execute(
+    "UPDATE sessions SET ended_at = $1, duration_minutes = $2 WHERE id = $3",
+    [endedAt, durationMinutes, id]
+  );
+}
+
+export async function getSessionsByDateRange(
+  from: string,
+  to: string
+): Promise<Session[]> {
+  const db = await getDb();
+  const rows = await db.select<SessionRow[]>(
+    "SELECT * FROM sessions WHERE started_at >= $1 AND started_at <= $2 ORDER BY started_at DESC",
+    [from, to]
+  );
+  return rows.map(rowToSession);
+}
+
+export async function getSessionsByTaskId(taskId: string): Promise<Session[]> {
+  const db = await getDb();
+  const rows = await db.select<SessionRow[]>(
+    "SELECT * FROM sessions WHERE task_id = $1 ORDER BY started_at DESC",
+    [taskId]
+  );
+  return rows.map(rowToSession);
+}
+
+// ─── Report query helpers ─────────────────────────────────────────────────────
+
+export async function getTaskTotalFocusMinutes(taskId: string): Promise<number> {
+  const db = await getDb();
+  const rows = await db.select<Array<{ total: number | null }>>(
+    "SELECT SUM(duration_minutes) as total FROM sessions WHERE task_id = $1 AND session_type = 'focus' AND duration_minutes IS NOT NULL",
+    [taskId]
+  );
+  return rows[0]?.total ?? 0;
+}
+
+export async function getCompletedTasksByDateRange(from: string, to: string): Promise<Task[]> {
+  const db = await getDb();
+  const rows = await db.select<TaskRow[]>(
+    "SELECT * FROM tasks WHERE status = 'done' AND completed_at >= $1 AND completed_at <= $2 ORDER BY completed_at DESC",
+    [from, to]
+  );
+  return rows.map(rowToTask);
+}
+
+export type FocusByList = {
+  listId: string;
+  minutes: number;
+};
+
+export async function getFocusMinutesByList(from: string, to: string): Promise<FocusByList[]> {
+  const db = await getDb();
+  const rows = await db.select<Array<{ list_id: string; minutes: number }>>(
+    `SELECT t.list_id, SUM(s.duration_minutes) as minutes
+     FROM sessions s
+     JOIN tasks t ON s.task_id = t.id
+     WHERE s.session_type = 'focus'
+       AND s.started_at >= $1
+       AND s.started_at <= $2
+       AND s.duration_minutes IS NOT NULL
+     GROUP BY t.list_id`,
+    [from, to]
+  );
+  return rows.map((r) => ({ listId: r.list_id, minutes: r.minutes }));
+}
+
+export type DailyStats = {
+  date: string;
+  count: number;
+  focusMinutes: number;
+};
+
+export async function getTasksCompletedPerDay(from: string, to: string): Promise<Array<{ date: string; count: number }>> {
+  const db = await getDb();
+  const rows = await db.select<Array<{ date: string; count: number }>>(
+    `SELECT date(completed_at) as date, COUNT(*) as count
+     FROM tasks
+     WHERE status = 'done' AND completed_at >= $1 AND completed_at <= $2
+     GROUP BY date(completed_at)`,
+    [from, to]
+  );
+  return rows;
+}
+
+export async function getFocusMinutesPerDay(from: string, to: string): Promise<Array<{ date: string; focusMinutes: number }>> {
+  const db = await getDb();
+  const rows = await db.select<Array<{ date: string; focusMinutes: number }>>(
+    `SELECT date(started_at) as date, SUM(duration_minutes) as focusMinutes
+     FROM sessions
+     WHERE session_type = 'focus'
+       AND started_at >= $1
+       AND started_at <= $2
+       AND duration_minutes IS NOT NULL
+     GROUP BY date(started_at)`,
+    [from, to]
+  );
+  return rows;
+}
+
+export type SessionWithTask = Session & { taskTitle: string | null };
+
+export async function getSessionsWithTaskNames(from: string, to: string): Promise<SessionWithTask[]> {
+  const db = await getDb();
+  const rows = await db.select<Array<SessionRow & { task_title: string | null }>>(
+    `SELECT s.*, t.title as task_title
+     FROM sessions s
+     LEFT JOIN tasks t ON s.task_id = t.id
+     WHERE s.started_at >= $1 AND s.started_at <= $2
+       AND s.ended_at IS NOT NULL
+     ORDER BY s.started_at DESC`,
+    [from, to]
+  );
+  return rows.map((r) => ({
+    ...rowToSession(r),
+    taskTitle: r.task_title,
+  }));
+}
+
+export async function getAllFocusSessionDates(): Promise<string[]> {
+  const db = await getDb();
+  const rows = await db.select<Array<{ date: string }>>(
+    "SELECT DISTINCT date(started_at) as date FROM sessions WHERE session_type = 'focus' AND duration_minutes IS NOT NULL ORDER BY date DESC"
+  );
+  return rows.map((r) => r.date);
+}
+
+// ─── Blocker profile helpers ──────────────────────────────────────────────────
+
+type BlockerProfileRow = {
+  id: string;
+  name: string;
+  is_default: number;
+  created_at: string;
+};
+
+type BlockerDomainRow = {
+  id: string;
+  profile_id: string;
+  domain: string;
+};
+
+export type BlockerProfile = {
+  id: string;
+  name: string;
+  isDefault: boolean;
+  createdAt: string;
+  domains: string[];
+};
+
+export async function getAllBlockerProfiles(): Promise<BlockerProfile[]> {
+  const db = await getDb();
+  const profiles = await db.select<BlockerProfileRow[]>(
+    "SELECT * FROM blocker_profiles ORDER BY created_at ASC"
+  );
+  const domains = await db.select<BlockerDomainRow[]>(
+    "SELECT * FROM blocker_domains"
+  );
+  return profiles.map((p) => ({
+    id: p.id,
+    name: p.name,
+    isDefault: p.is_default === 1,
+    createdAt: p.created_at,
+    domains: domains.filter((d) => d.profile_id === p.id).map((d) => d.domain),
+  }));
+}
+
+export async function createBlockerProfile(
+  id: string,
+  name: string
+): Promise<void> {
+  const db = await getDb();
+  await db.execute(
+    "INSERT INTO blocker_profiles (id, name) VALUES ($1, $2)",
+    [id, name]
+  );
+}
+
+export async function updateBlockerProfile(
+  id: string,
+  name: string
+): Promise<void> {
+  const db = await getDb();
+  await db.execute(
+    "UPDATE blocker_profiles SET name = $1 WHERE id = $2",
+    [name, id]
+  );
+}
+
+export async function deleteBlockerProfile(id: string): Promise<void> {
+  const db = await getDb();
+  await db.execute("DELETE FROM blocker_profiles WHERE id = $1", [id]);
+}
+
+export async function setBlockerDomains(
+  profileId: string,
+  domains: string[]
+): Promise<void> {
+  const db = await getDb();
+  await db.execute("DELETE FROM blocker_domains WHERE profile_id = $1", [profileId]);
+  for (const domain of domains) {
+    const trimmed = domain.trim();
+    if (!trimmed) continue;
+    const id = crypto.randomUUID();
+    await db.execute(
+      "INSERT INTO blocker_domains (id, profile_id, domain) VALUES ($1, $2, $3)",
+      [id, profileId, trimmed]
+    );
+  }
+}

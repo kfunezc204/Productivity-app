@@ -1,4 +1,5 @@
 import { useState } from "react";
+import MiniTimer from "@/components/focus/MiniTimer";
 import { NavLink } from "react-router-dom";
 import {
   LayoutDashboard,
@@ -184,9 +185,9 @@ export default function Sidebar() {
         </nav>
       </div>
 
-      {/* Footer */}
+      {/* Footer — Mini Timer */}
       <div className="border-t border-[#2A2A2A] p-3">
-        <p className="text-[10px] text-white/20 text-center">BlitzDesk v0.1</p>
+        <MiniTimer />
       </div>
 
       <ListDialog

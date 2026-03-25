@@ -1,14 +1,16 @@
 import { useState, useRef } from "react";
+import { useNavigate } from "react-router-dom";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { format, isPast, isToday, parseISO } from "date-fns";
-import { ChevronUp, ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Play, Pencil } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { useTaskStore, type Task, type TaskStatus } from "@/stores/taskStore";
 import { useListStore } from "@/stores/listStore";
-import { formatMinutes } from "@/lib/timeUtils";
+import { useTimerStore } from "@/stores/timerStore";
+import { formatMinutes, parseEstimate } from "@/lib/timeUtils";
 import { fireConfetti } from "@/lib/confetti";
 
 const STATUS_ORDER: TaskStatus[] = ["backlog", "this_week", "today"];
@@ -33,9 +35,17 @@ export default function TaskCard({ task, columnStatus, columnTasks }: Props) {
   const [titleDraft, setTitleDraft] = useState(task.title);
   const inputRef = useRef<HTMLInputElement>(null);
 
+  const [editingActual, setEditingActual] = useState(false);
+  const [actualDraft, setActualDraft] = useState("");
+  const actualInputRef = useRef<HTMLInputElement>(null);
+
   const selectedTaskId = useTaskStore((s) => s.selectedTaskId);
   const { completeTask, updateTask, moveTask, reorderTasks, selectTask } = useTaskStore.getState();
   const lists = useListStore((s) => s.lists);
+  const timerStatus = useTimerStore((s) => s.status);
+  const activeTaskId = useTimerStore((s) => s.activeTaskId);
+  const navigate = useNavigate();
+  const isTimerActiveOnThis = timerStatus !== "idle" && activeTaskId === task.id;
 
   const list = lists.find((l) => l.id === task.listId);
 
@@ -50,12 +60,33 @@ export default function TaskCard({ task, columnStatus, columnTasks }: Props) {
   }
 
   // Actual time badge color
-  let actualBadgeVariant: "default" | "secondary" | "destructive" | "outline" = "secondary";
+  let actualBadgeClass = "bg-white/5 text-white/50";
   if (task.estimatedMinutes && task.actualMinutes > 0) {
     const ratio = task.actualMinutes / task.estimatedMinutes;
-    if (ratio <= 1) actualBadgeVariant = "default"; // green-ish (we'll use CSS)
-    else if (ratio <= 1.25) actualBadgeVariant = "outline"; // yellow
-    else actualBadgeVariant = "destructive"; // red
+    if (ratio <= 1.0) actualBadgeClass = "bg-green-500/20 text-green-400";
+    else if (ratio <= 1.25) actualBadgeClass = "bg-yellow-500/20 text-yellow-400";
+    else actualBadgeClass = "bg-red-500/20 text-red-400";
+  }
+
+  function startActualEdit(e: React.MouseEvent) {
+    e.stopPropagation();
+    if (isTimerActiveOnThis) return;
+    setActualDraft(task.actualMinutes > 0 ? `${task.actualMinutes}m` : "");
+    setEditingActual(true);
+    setTimeout(() => actualInputRef.current?.select(), 0);
+  }
+
+  async function saveActualEdit() {
+    const parsed = parseEstimate(actualDraft);
+    if (parsed !== null && parsed !== task.actualMinutes) {
+      await updateTask(task.id, { actualMinutes: parsed });
+    }
+    setEditingActual(false);
+  }
+
+  function handleActualKeyDown(e: React.KeyboardEvent) {
+    if (e.key === "Enter") saveActualEdit();
+    if (e.key === "Escape") setEditingActual(false);
   }
 
   async function handleComplete(e: React.MouseEvent) {
@@ -194,14 +225,38 @@ export default function TaskCard({ task, columnStatus, columnTasks }: Props) {
             )}
 
             {/* Actual time badge */}
-            {task.actualMinutes > 0 && (
-              <Badge
-                variant={actualBadgeVariant}
-                className="h-4 px-1.5 text-[10px] border-0"
+            {editingActual ? (
+              <Input
+                ref={actualInputRef}
+                value={actualDraft}
+                onChange={(e) => setActualDraft(e.target.value)}
+                onBlur={saveActualEdit}
+                onKeyDown={handleActualKeyDown}
+                onClick={(e) => e.stopPropagation()}
+                className="h-4 w-14 px-1 py-0 text-[10px] bg-[#111] border-orange-500/50 text-white"
+              />
+            ) : task.actualMinutes > 0 ? (
+              <span
+                className="group/actual flex items-center gap-0.5 cursor-default"
+                onClick={(e) => e.stopPropagation()}
               >
-                {formatMinutes(task.actualMinutes)}
-              </Badge>
-            )}
+                <Badge
+                  variant="secondary"
+                  className={`h-4 px-1.5 text-[10px] border-0 ${actualBadgeClass}`}
+                >
+                  {formatMinutes(task.actualMinutes)}
+                </Badge>
+                {!isTimerActiveOnThis && (
+                  <button
+                    onClick={startActualEdit}
+                    className="opacity-0 group-hover/actual:opacity-100 transition-opacity p-0.5 rounded text-white/30 hover:text-white/60"
+                    title="Edit actual time"
+                  >
+                    <Pencil size={8} />
+                  </button>
+                )}
+              </span>
+            ) : null}
 
             {/* Due date */}
             {task.dueDate && (
@@ -211,6 +266,20 @@ export default function TaskCard({ task, columnStatus, columnTasks }: Props) {
             )}
           </div>
         </div>
+
+        {/* Focus button — Today tasks only, when timer is idle */}
+        {columnStatus === "today" && timerStatus === "idle" && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              useTimerStore.getState().startFocusSession([task.id]).then(() => navigate("/focus"));
+            }}
+            className="opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0 p-1 rounded text-orange-500/50 hover:text-orange-500 hover:bg-orange-500/10"
+            title="Start focus session"
+          >
+            <Play size={12} />
+          </button>
+        )}
 
         {/* Arrow actions — hover only */}
         <div className="flex flex-col gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">

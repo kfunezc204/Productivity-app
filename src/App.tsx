@@ -7,13 +7,16 @@ import FocusPage from "@/pages/FocusPage";
 import ReportsPage from "@/pages/ReportsPage";
 import SettingsPage from "@/pages/SettingsPage";
 import { useSettingsStore } from "@/stores/settingsStore";
+import { useTimerStore } from "@/stores/timerStore";
 
 export default function App() {
   const isLoaded = useSettingsStore((s) => s.isLoaded);
 
   // Empty deps: run once on mount via getState() — avoids Zustand v5 reference instability
   useEffect(() => {
-    useSettingsStore.getState().loadSettings();
+    useSettingsStore.getState().loadSettings().then(() => {
+      useTimerStore.getState().loadPersistedTimer();
+    });
   }, []);
 
   if (!isLoaded) {

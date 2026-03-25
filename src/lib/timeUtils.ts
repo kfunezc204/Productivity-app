@@ -47,6 +47,17 @@ export function formatMinutes(minutes: number): string {
 }
 
 /**
+ * Formats a total number of seconds into MM:SS display string.
+ * e.g. 1500 → "25:00", 90 → "01:30"
+ */
+export function formatSeconds(totalSeconds: number): string {
+  const s = Math.max(0, Math.floor(totalSeconds));
+  const m = Math.floor(s / 60);
+  const sec = s % 60;
+  return `${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}`;
+}
+
+/**
  * Extracts an estimate from the end of a task title string.
  * e.g. "Design homepage 45m" → { title: "Design homepage", est: 45 }
  * Returns null for est if no pattern found at end.

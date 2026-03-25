@@ -55,6 +55,7 @@ type TaskActions = {
   reorderTasks: (updates: Array<{ id: string; position: number; status?: TaskStatus }>) => Promise<void>;
   selectTask: (id: string | null) => void;
   toggleShowDone: () => void;
+  updateTaskInMemory: (id: string, fields: Partial<Pick<Task, "actualMinutes" | "estimatedMinutes">>) => void;
 };
 
 export const useTaskStore = create<TaskState & TaskActions>((set, get) => ({
@@ -215,6 +216,12 @@ export const useTaskStore = create<TaskState & TaskActions>((set, get) => ({
       get().loadDoneTasks();
     }
     set({ showDone: !showDone });
+  },
+
+  updateTaskInMemory: (id, fields) => {
+    set((state) => ({
+      tasks: state.tasks.map((t) => (t.id === id ? { ...t, ...fields } : t)),
+    }));
   },
 }));
 

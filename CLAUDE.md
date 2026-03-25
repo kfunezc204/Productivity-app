@@ -65,7 +65,8 @@ productivity-app/
 │   │   ├── taskStore.ts
 │   │   ├── timerStore.ts
 │   │   ├── listStore.ts
-│   │   └── settingsStore.ts
+│   │   ├── settingsStore.ts
+│   │   └── lockerStore.ts
 │   ├── lib/
 │   │   ├── db.ts          # All SQLite queries — no raw SQL outside this file
 │   │   ├── recurrence.ts  # Recurring task engine
@@ -103,17 +104,19 @@ productivity-app/
 - **Migrations**: Registered in `src-tauri/src/lib.rs` as a `vec![Migration { ... }]` and run automatically on startup via `tauri-plugin-sql`
 - **Settings** are stored as plain strings in the `settings` table and parsed to typed values inside the store (e.g. `parseInt(focusMin)`)
 
-### DB Schema (001_init.sql)
-| Table | Purpose |
-|---|---|
-| `lists` | User-defined task lists (Inbox, Work, etc.) with color + icon |
-| `tasks` | All tasks; `status` ∈ `backlog\|this_week\|today\|done`; `list_id` FK |
-| `sessions` | Focus/break time log; linked to a task via nullable `task_id` |
-| `settings` | Key/value app settings (theme, pomodoro config, etc.) |
-| `tags` | Global tags with color |
-| `task_tags` | Many-to-many join between tasks and tags |
+### DB Schema
+| Table | Migration | Purpose |
+|---|---|---|
+| `lists` | 001 | User-defined task lists (Inbox, Work, etc.) with color + icon |
+| `tasks` | 001 | All tasks; `status` ∈ `backlog\|this_week\|today\|done`; `list_id` FK |
+| `sessions` | 001 | Focus/break time log; linked to a task via nullable `task_id` |
+| `settings` | 001 | Key/value app settings (theme, pomodoro config, etc.) |
+| `tags` | 001 | Global tags with color |
+| `task_tags` | 001 | Many-to-many join between tasks and tags |
+| `blocker_profiles` | 002 | Named website blocklist profiles |
+| `blocker_domains` | 002 | Domains per profile; CASCADE delete on profile removal |
 
-Default "Inbox" list (`id: 'inbox-default'`) is seeded by migration.
+Default "Inbox" list (`id: 'inbox-default'`) is seeded by migration 001. Migration 002 also seeds `locker_during_breaks = 'false'` into `settings`.
 
 ### Zustand Store Pattern
 Each store exports a single `use*Store` hook. Stores separate state shape (`*State` type) from actions (`*Actions` type). All stores have an `isLoaded: boolean` flag. DB calls flow: **component → store action → `src/lib/db.ts` function → SQLite**. Never skip `db.ts`.
@@ -166,6 +169,8 @@ done       → Done column (hidden by default)
 - Rust commands in `src-tauri/src/commands/` — one file per domain
 - Always use `tauri::command` macro with typed returns
 - Sensitive operations (hosts file, secure store) only in Rust — never in JS
+- Locker commands in `commands/locker.rs`: `check_locker_permission`, `activate_locker(domains)`, `deactivate_locker`
+  - Hosts file entries are wrapped in `# BLITZDESK-LOCKER-START` / `# BLITZDESK-LOCKER-END` sentinels so they can be cleanly removed
 
 ---
 
@@ -208,45 +213,45 @@ Update checkboxes here AND in `Plan.md` as tasks are completed.
 ---
 
 ### Milestone 3 — Focus Mode & Timer
-- [ ] Focus Mode route + full-screen overlay
-- [ ] Start Focus Session from Today column
-- [ ] Live MM:SS timer per task
-- [ ] Pomodoro cycle (focus → break → repeat)
-- [ ] Timer controls (Start/Pause/Resume/Skip/Done)
-- [ ] Keyboard shortcuts (Space, S, D, Esc)
-- [ ] Auto-advance on task completion
-- [ ] Pomodoro progress bar
-- [ ] Session log
-- [ ] System notifications
-- [ ] Timer persistence (survive app restart)
-- [ ] Mini timer widget in sidebar
-- [ ] Focus Locker panel (URL blocklist manager)
-- [ ] Named blocklist profiles
-- [ ] Assign profile to session
-- [ ] Hosts file write on Focus start
-- [ ] Hosts file cleanup on Focus end
-- [ ] "Locker ON" badge in overlay
-- [ ] Locker behavior during breaks (toggle)
-- [ ] Graceful fallback if permission denied
+- [x] Focus Mode route + full-screen overlay
+- [x] Start Focus Session from Today column
+- [x] Live MM:SS timer per task
+- [x] Pomodoro cycle (focus → break → repeat)
+- [x] Timer controls (Start/Pause/Resume/Skip/Done)
+- [x] Keyboard shortcuts (Space, S, D, Esc)
+- [x] Auto-advance on task completion
+- [x] Pomodoro progress bar
+- [x] Session log
+- [x] System notifications
+- [x] Timer persistence (survive app restart)
+- [x] Mini timer widget in sidebar
+- [x] Focus Locker panel (URL blocklist manager)
+- [x] Named blocklist profiles
+- [x] Assign profile to session
+- [x] Hosts file write on Focus start
+- [x] Hosts file cleanup on Focus end
+- [x] "Locker ON" badge in overlay
+- [x] Locker behavior during breaks (toggle)
+- [x] Graceful fallback if permission denied
 
-**Status**: NOT STARTED
+**Status**: COMPLETE
 
 ---
 
 ### Milestone 4 — Time Tracking & Reports
-- [ ] Auto-log sessions to DB
-- [ ] Manual time correction on cards
-- [ ] EST vs Actual indicator (green/yellow/red)
-- [ ] Reports page
-- [ ] Date range picker
-- [ ] Stat cards (focus time, tasks done, EST accuracy)
-- [ ] Time by list donut chart
-- [ ] Tasks per day bar chart
-- [ ] Session history table
-- [ ] Streak counter
-- [ ] PDF export
+- [x] Auto-log sessions to DB
+- [x] Manual time correction on cards
+- [x] EST vs Actual indicator (green/yellow/red)
+- [x] Reports page
+- [x] Date range picker
+- [x] Stat cards (focus time, tasks done, EST accuracy)
+- [x] Time by list donut chart
+- [x] Tasks per day bar chart
+- [x] Session history table
+- [x] Streak counter
+- [x] PDF export
 
-**Status**: NOT STARTED
+**Status**: COMPLETE
 
 ---
 
@@ -335,4 +340,4 @@ npm run tauri add sql
 
 ---
 
-*Last updated: 2026-03-24 (architecture section added)*
+*Last updated: 2026-03-25 (Milestone 4 complete — actual_minutes sync, manual time correction, reportStore, Reports page with charts/table/streak/PDF export)*
