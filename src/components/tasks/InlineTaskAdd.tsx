@@ -2,6 +2,13 @@ import { useState, useRef, useEffect } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Plus } from "lucide-react";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useTaskStore, type TaskStatus } from "@/stores/taskStore";
 import { useListStore } from "@/stores/listStore";
 import { extractEstFromTitle } from "@/lib/timeUtils";
@@ -13,9 +20,10 @@ type Props = {
 export default function InlineTaskAdd({ status }: Props) {
   const [open, setOpen] = useState(false);
   const [value, setValue] = useState("");
+  const [pickedListId, setPickedListId] = useState("inbox-default");
   const inputRef = useRef<HTMLInputElement>(null);
   const { addTask } = useTaskStore();
-  const { selectedListId } = useListStore();
+  const { selectedListId, lists } = useListStore();
 
   function openInput() {
     setOpen(true);
@@ -30,8 +38,8 @@ export default function InlineTaskAdd({ status }: Props) {
       return;
     }
     const { title, est } = extractEstFromTitle(trimmed);
-    const listId = selectedListId ?? "inbox-default";
-    await addTask(title, status, listId, est);
+    const effectiveListId = selectedListId ?? pickedListId;
+    await addTask(title, status, effectiveListId, est);
     setValue("");
     // Keep open for rapid entry
     setTimeout(() => inputRef.current?.focus(), 0);
@@ -83,20 +91,37 @@ export default function InlineTaskAdd({ status }: Props) {
             transition={{ duration: 0.15 }}
             className="overflow-hidden"
           >
-            <Input
-              ref={inputRef}
-              value={value}
-              onChange={(e) => setValue(e.target.value)}
-              onKeyDown={handleKeyDown}
-              onBlur={() => {
-                if (!value.trim()) {
-                  setOpen(false);
-                  setValue("");
-                }
-              }}
-              placeholder="Task title… (append 30m for estimate)"
-              className="h-8 text-sm bg-[#111] border-[#2A2A2A] focus:border-orange-500/50 text-white placeholder:text-white/25"
-            />
+            <div className="flex gap-1.5">
+              {selectedListId === null && (
+                <Select value={pickedListId} onValueChange={(v) => { if (v) setPickedListId(v); }}>
+                  <SelectTrigger className="w-[120px] h-8 text-xs bg-[#111] border-[#2A2A2A] text-white/60 flex-shrink-0">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="bg-[#1A1A1A] border-[#2A2A2A] text-white">
+                    {lists.map((l) => (
+                      <SelectItem key={l.id} value={l.id} className="text-xs text-white/70 focus:text-white focus:bg-white/10">
+                        {l.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
+              )}
+              <Input
+                ref={inputRef}
+                value={value}
+                onChange={(e) => setValue(e.target.value)}
+                onKeyDown={handleKeyDown}
+                onBlur={() => {
+                  if (!value.trim()) {
+                    setOpen(false);
+                    setValue("");
+                  }
+                }}
+                placeholder="Task title… (append 30m for estimate)"
+                className="h-8 text-sm bg-[#111] border-[#2A2A2A] focus:border-orange-500/50 text-white placeholder:text-white/25"
+              />
+            </div>
           </motion.div>
         ) : (
           <motion.button

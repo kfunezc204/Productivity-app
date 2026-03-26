@@ -10,11 +10,13 @@ import {
   type DragEndEvent,
 } from "@dnd-kit/core";
 import { AnimatePresence } from "framer-motion";
-import { Eye, EyeOff } from "lucide-react";
+import { Eye, EyeOff, LayoutDashboard } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import KanbanColumn from "./KanbanColumn";
 import DoneColumn from "./DoneColumn";
 import { useTaskStore, useTasksByColumn, type TaskStatus, type Task } from "@/stores/taskStore";
+import { useListStore } from "@/stores/listStore";
+import { ListIcon } from "@/lib/iconMap";
 
 const COLUMNS: Array<{ status: TaskStatus; title: string }> = [
   { status: "backlog", title: "Backlog" },
@@ -28,9 +30,13 @@ export default function KanbanBoard() {
   const toggleShowDone = useTaskStore((s) => s.toggleShowDone);
   const [activeTask, setActiveTask] = useState<Task | null>(null);
 
-  const backlogTasks = useTasksByColumn("backlog");
-  const thisWeekTasks = useTasksByColumn("this_week");
-  const todayTasks = useTasksByColumn("today");
+  const selectedListId = useListStore((s) => s.selectedListId);
+  const lists = useListStore((s) => s.lists);
+  const activeList = selectedListId != null ? lists.find((l) => l.id === selectedListId) : null;
+
+  const backlogTasks = useTasksByColumn("backlog", selectedListId);
+  const thisWeekTasks = useTasksByColumn("this_week", selectedListId);
+  const todayTasks = useTasksByColumn("today", selectedListId);
 
   const columnTasksMap: Record<TaskStatus, Task[]> = {
     backlog: backlogTasks,
@@ -125,7 +131,21 @@ export default function KanbanBoard() {
     >
       <div className="flex flex-col h-full">
         {/* Toolbar */}
-        <div className="flex items-center justify-end px-4 py-2 border-b border-[#2A2A2A] flex-shrink-0">
+        <div className="flex items-center justify-between px-4 py-2 border-b border-[#2A2A2A] flex-shrink-0">
+          {/* Board header */}
+          <div className="flex items-center gap-2">
+            {activeList ? (
+              <>
+                <ListIcon icon={activeList.icon} color={activeList.color} />
+                <span className="text-base font-semibold text-white/90">{activeList.name}</span>
+              </>
+            ) : (
+              <>
+                <LayoutDashboard size={15} className="text-white/60" />
+                <span className="text-base font-semibold text-white/90">All Tasks</span>
+              </>
+            )}
+          </div>
           <Button
             variant="ghost"
             size="sm"

@@ -14,6 +14,10 @@ type SettingsState = {
   lockerDuringBreaks: boolean;
   autoStartNextPomodoro: boolean;
   onboardingCompleted: boolean;
+  focusBackground: string;
+  focusSound: string;
+  focusSoundVolume: number;
+  autoOpenLinks: boolean;
   isLoaded: boolean;
 };
 
@@ -29,6 +33,10 @@ type SettingsActions = {
   setNotificationsEnabled: (val: boolean) => Promise<void>;
   setAutoStartNextPomodoro: (val: boolean) => Promise<void>;
   setOnboardingCompleted: (val: boolean) => Promise<void>;
+  setFocusBackground: (val: string) => Promise<void>;
+  setFocusSound: (val: string) => Promise<void>;
+  setFocusSoundVolume: (val: number) => Promise<void>;
+  setAutoOpenLinks: (val: boolean) => Promise<void>;
 };
 
 export const useSettingsStore = create<SettingsState & SettingsActions>(
@@ -43,6 +51,10 @@ export const useSettingsStore = create<SettingsState & SettingsActions>(
     lockerDuringBreaks: false,
     autoStartNextPomodoro: true,
     onboardingCompleted: false,
+    focusBackground: "dark",
+    focusSound: "none",
+    focusSoundVolume: 50,
+    autoOpenLinks: false,
     isLoaded: false,
 
     loadSettings: async () => {
@@ -57,6 +69,10 @@ export const useSettingsStore = create<SettingsState & SettingsActions>(
         lockerBreaks,
         autoStart,
         onboarding,
+        focusBg,
+        focusSound,
+        focusSoundVol,
+        autoOpenLinks,
       ] = await Promise.all([
         getSetting("theme"),
         getSetting("pomodoro_focus_minutes"),
@@ -68,6 +84,10 @@ export const useSettingsStore = create<SettingsState & SettingsActions>(
         getSetting("locker_during_breaks"),
         getSetting("auto_start_next_pomodoro"),
         getSetting("onboarding_completed"),
+        getSetting("focus_background"),
+        getSetting("focus_sound"),
+        getSetting("focus_sound_volume"),
+        getSetting("auto_open_links"),
       ]);
 
       const resolvedTheme: Theme =
@@ -90,6 +110,10 @@ export const useSettingsStore = create<SettingsState & SettingsActions>(
         lockerDuringBreaks: lockerBreaks === "true",
         autoStartNextPomodoro: autoStart !== "false",
         onboardingCompleted: onboarding === "true",
+        focusBackground: focusBg || "dark",
+        focusSound: focusSound || "none",
+        focusSoundVolume: focusSoundVol ? parseInt(focusSoundVol) : 50,
+        autoOpenLinks: autoOpenLinks === "true",
         isLoaded: true,
       });
     },
@@ -143,6 +167,26 @@ export const useSettingsStore = create<SettingsState & SettingsActions>(
     setOnboardingCompleted: async (val: boolean) => {
       await setSetting("onboarding_completed", String(val));
       set({ onboardingCompleted: val });
+    },
+
+    setFocusBackground: async (val: string) => {
+      await setSetting("focus_background", val);
+      set({ focusBackground: val });
+    },
+
+    setFocusSound: async (val: string) => {
+      await setSetting("focus_sound", val);
+      set({ focusSound: val });
+    },
+
+    setFocusSoundVolume: async (val: number) => {
+      await setSetting("focus_sound_volume", String(val));
+      set({ focusSoundVolume: val });
+    },
+
+    setAutoOpenLinks: async (val: boolean) => {
+      await setSetting("auto_open_links", String(val));
+      set({ autoOpenLinks: val });
     },
   })
 );

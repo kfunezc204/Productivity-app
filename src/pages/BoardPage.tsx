@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { AnimatePresence, motion } from "framer-motion";
 import { useTaskStore } from "@/stores/taskStore";
 import { useListStore } from "@/stores/listStore";
 import KanbanBoard from "@/components/tasks/KanbanBoard";
@@ -13,6 +14,8 @@ export default function BoardPage() {
     useTaskStore.getState().loadTasks();
     useListStore.getState().loadLists();
   }, []);
+
+  const selectedTaskId = useTaskStore((s) => s.selectedTaskId);
 
   const ready = tasksLoaded && listsLoaded;
 
@@ -29,8 +32,20 @@ export default function BoardPage() {
 
   return (
     <div className="flex flex-1 h-full overflow-hidden">
-      <div className="flex-1 flex flex-col overflow-hidden min-w-0">
+      <div className="flex-1 flex flex-col overflow-hidden min-w-0 relative">
         <KanbanBoard />
+        <AnimatePresence>
+          {selectedTaskId && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.15 }}
+              className="absolute inset-0 z-10 cursor-pointer"
+              onClick={() => useTaskStore.getState().selectTask(null)}
+            />
+          )}
+        </AnimatePresence>
       </div>
       <TaskDetailPanel />
     </div>

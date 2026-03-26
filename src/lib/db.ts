@@ -56,6 +56,7 @@ type TaskRow = {
   completed_at: string | null;
   created_at: string;
   updated_at: string;
+  parent_task_id: string | null;
 };
 
 // ─── List helpers ─────────────────────────────────────────────────────────────
@@ -153,13 +154,14 @@ function rowToTask(row: TaskRow): Task {
     completedAt: row.completed_at,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+    parentTaskId: row.parent_task_id,
   };
 }
 
 export async function getAllTasks(): Promise<Task[]> {
   const db = await getDb();
   const rows = await db.select<TaskRow[]>(
-    "SELECT * FROM tasks WHERE status != 'done' ORDER BY position ASC"
+    "SELECT * FROM tasks WHERE status != 'done' AND parent_task_id IS NULL ORDER BY position ASC"
   );
   return rows.map(rowToTask);
 }
@@ -167,7 +169,7 @@ export async function getAllTasks(): Promise<Task[]> {
 export async function getDoneTasks(limit = 50): Promise<Task[]> {
   const db = await getDb();
   const rows = await db.select<TaskRow[]>(
-    "SELECT * FROM tasks WHERE status = 'done' ORDER BY completed_at DESC LIMIT $1",
+    "SELECT * FROM tasks WHERE status = 'done' AND parent_task_id IS NULL ORDER BY completed_at DESC LIMIT $1",
     [limit]
   );
   return rows.map(rowToTask);
@@ -276,6 +278,92 @@ export async function reorderTasks(
   }
 }
 
+// ─── Subtask helpers ──────────────────────────────────────────────────────────
+
+export async function getSubtasks(parentId: string): Promise<Task[]> {
+  const db = await getDb();
+  const rows = await db.select<TaskRow[]>(
+    "SELECT * FROM tasks WHERE parent_task_id = $1 ORDER BY position ASC",
+    [parentId]
+  );
+  return rows.map(rowToTask);
+}
+
+export async function getSubtaskCounts(): Promise<Record<string, { total: number; done: number; estimatedMinutesSum: number | null }>> {
+  const db = await getDb();
+  const rows = await db.select<Array<{ parent_task_id: string; total: number; done: number; est_sum: number | null }>>(
+    `SELECT parent_task_id,
+            COUNT(*) as total,
+            SUM(CASE WHEN status = 'done' THEN 1 ELSE 0 END) as done,
+            SUM(estimated_minutes) as est_sum
+     FROM tasks
+     WHERE parent_task_id IS NOT NULL
+     GROUP BY parent_task_id`
+  );
+  const result: Record<string, { total: number; done: number; estimatedMinutesSum: number | null }> = {};
+  for (const r of rows) {
+    result[r.parent_task_id] = { total: r.total, done: r.done, estimatedMinutesSum: r.est_sum };
+  }
+  return result;
+}
+
+export async function createSubtask(
+  id: string,
+  parentId: string,
+  listId: string,
+  title: string,
+  status: string,
+  position: number,
+  estimatedMinutes?: number | null
+): Promise<void> {
+  const db = await getDb();
+  await db.execute(
+    "INSERT INTO tasks (id, list_id, title, status, position, parent_task_id, estimated_minutes) VALUES ($1, $2, $3, $4, $5, $6, $7)",
+    [id, listId, title, status, position, parentId, estimatedMinutes ?? null]
+  );
+}
+
+export async function toggleSubtask(id: string, done: boolean, restoreStatus: string): Promise<void> {
+  const db = await getDb();
+  if (done) {
+    await db.execute(
+      "UPDATE tasks SET status = 'done', completed_at = datetime('now'), updated_at = datetime('now') WHERE id = $1",
+      [id]
+    );
+  } else {
+    await db.execute(
+      "UPDATE tasks SET status = $1, completed_at = NULL, updated_at = datetime('now') WHERE id = $2",
+      [restoreStatus, id]
+    );
+  }
+}
+
+export async function deleteSubtask(id: string): Promise<void> {
+  const db = await getDb();
+  await db.execute("DELETE FROM tasks WHERE id = $1", [id]);
+}
+
+export async function reorderSubtasks(
+  updates: Array<{ id: string; position: number }>
+): Promise<void> {
+  const db = await getDb();
+  for (const u of updates) {
+    await db.execute(
+      "UPDATE tasks SET position = $1, updated_at = datetime('now') WHERE id = $2",
+      [u.position, u.id]
+    );
+  }
+}
+
+export async function getMaxSubtaskPosition(parentId: string): Promise<number> {
+  const db = await getDb();
+  const rows = await db.select<Array<{ max_pos: number | null }>>(
+    "SELECT COALESCE(MAX(position), -1) as max_pos FROM tasks WHERE parent_task_id = $1",
+    [parentId]
+  );
+  return rows[0]?.max_pos ?? -1;
+}
+
 // ─── Session helpers ──────────────────────────────────────────────────────────
 
 type SessionRow = {
@@ -370,7 +458,7 @@ export async function getTaskTotalFocusMinutes(taskId: string): Promise<number> 
 export async function getCompletedTasksByDateRange(from: string, to: string): Promise<Task[]> {
   const db = await getDb();
   const rows = await db.select<TaskRow[]>(
-    "SELECT * FROM tasks WHERE status = 'done' AND completed_at >= $1 AND completed_at <= $2 ORDER BY completed_at DESC",
+    "SELECT * FROM tasks WHERE status = 'done' AND parent_task_id IS NULL AND completed_at >= $1 AND completed_at <= $2 ORDER BY completed_at DESC",
     [from, to]
   );
   return rows.map(rowToTask);
@@ -408,7 +496,7 @@ export async function getTasksCompletedPerDay(from: string, to: string): Promise
   const rows = await db.select<Array<{ date: string; count: number }>>(
     `SELECT date(completed_at) as date, COUNT(*) as count
      FROM tasks
-     WHERE status = 'done' AND completed_at >= $1 AND completed_at <= $2
+     WHERE status = 'done' AND parent_task_id IS NULL AND completed_at >= $1 AND completed_at <= $2
      GROUP BY date(completed_at)`,
     [from, to]
   );

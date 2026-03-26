@@ -272,51 +272,51 @@ Update checkboxes here AND in `Plan.md` as tasks are completed.
 ---
 
 ### Milestone 6 — Subtasks
-- [ ] Migration `003_subtasks.sql`: `parent_task_id` column + index
-- [ ] Register migration in `lib.rs`
-- [ ] `getSubtasks`, `createSubtask`, `toggleSubtask`, `deleteSubtask`, `reorderSubtasks` in `db.ts`
-- [ ] `getAllTasks()` excludes subtasks (`WHERE parent_task_id IS NULL`)
-- [ ] `Task` type gains `parentTaskId: string | null`
-- [ ] `subtasks: Record<string, Task[]>` state + load/add/toggle/delete/reorder actions
-- [ ] `useSubtasks(parentId)` and `useSubtaskProgress(parentId)` selectors
-- [ ] `useTasksByColumn` filters out subtasks
-- [ ] Subtask progress badge on TaskCard ("2/5 ✓")
-- [ ] Subtask section in TaskDetailPanel (list, add, delete, reorder)
+- [x] Migration `003_subtasks.sql`: `parent_task_id` column + index
+- [x] Register migration in `lib.rs`
+- [x] `getSubtasks`, `createSubtask`, `toggleSubtask`, `deleteSubtask`, `reorderSubtasks` in `db.ts`
+- [x] `getAllTasks()` excludes subtasks (`WHERE parent_task_id IS NULL`)
+- [x] `Task` type gains `parentTaskId: string | null`
+- [x] `subtasks: Record<string, Task[]>` state + load/add/toggle/delete/reorder actions
+- [x] `useSubtasks(parentId)` and `useSubtaskProgress(parentId)` selectors
+- [x] `useTasksByColumn` filters out subtasks
+- [x] Subtask progress badge on TaskCard ("2/5 ✓")
+- [x] Subtask section in TaskDetailPanel (list, add, delete, reorder)
 
-**Status**: NOT STARTED
+**Status**: COMPLETE
 
 ---
 
 ### Milestone 7 — List Filtering & All Lists View
-- [ ] `useTasksByColumn` reads `selectedListId` from listStore for filtering
-- [ ] Kanban board header shows current list name/icon or "All Tasks"
-- [ ] TaskCard shows list name label in "All Tasks" view
-- [ ] Sidebar: "All Tasks" active state, task counts per list
-- [ ] InlineTaskAdd: list picker dropdown when in "All Tasks" view
+- [x] `useTasksByColumn` reads `selectedListId` from listStore for filtering
+- [x] Kanban board header shows current list name/icon or "All Tasks"
+- [x] TaskCard shows list name label in "All Tasks" view
+- [x] Sidebar: "All Tasks" active state, task counts per list
+- [x] InlineTaskAdd: list picker dropdown when in "All Tasks" view
 
-**Status**: NOT STARTED
+**Status**: COMPLETE
 
 ---
 
 ### Milestone 8 — Focus Mode Enhancements
-- [ ] `"floating-timer"` window in `tauri.conf.json` (340×88, always-on-top, transparent, hidden)
-- [ ] `floating-timer` in `capabilities/default.json` + drag/event permissions
-- [ ] `src/lib/timerBridge.ts` — cross-window Tauri event bridge
-- [ ] `timerStore` broadcasts state on tick; listens for actions from floating window
-- [ ] `src/components/focus/FloatingTimer.tsx` — compact draggable timer UI
-- [ ] `src/pages/FloatingTimerPage.tsx` — minimal page (no AppShell)
-- [ ] `/floating-timer` route in `App.tsx` outside `<AppShell>`
-- [ ] Focus session start → show floating window, hide main window
-- [ ] Session end / Expand → show main window, hide floating window
-- [ ] "Minimize to floating" button in FocusOverlay
-- [ ] `src/lib/urlUtils.ts` — URL extraction; auto-open on task activation
-- [ ] `autoOpenLinks` setting + Settings toggle + link display in FocusOverlay
-- [ ] `focusBackground` setting (dark/gradient-warm/gradient-cool/gradient-purple/nature)
-- [ ] Background picker in Settings; applied in FocusOverlay
-- [ ] `src/lib/audioManager.ts` + ambient sound assets in `public/sounds/`
-- [ ] `focusSound` / `focusSoundVolume` settings; sound selector in FocusOverlay + Settings
+- [x] `"floating-timer"` window in `tauri.conf.json` (340×88, always-on-top, transparent, hidden)
+- [x] `floating-timer` in `capabilities/default.json` + drag/event permissions
+- [x] `src/lib/timerBridge.ts` — cross-window Tauri event bridge
+- [x] `timerStore` broadcasts state on tick; listens for actions from floating window
+- [x] `src/components/focus/FloatingTimer.tsx` — compact draggable timer UI
+- [x] `src/pages/FloatingTimerPage.tsx` — minimal page (no AppShell)
+- [x] `/floating-timer` route in `App.tsx` outside `<AppShell>`
+- [ ] Focus session start → show floating window, hide main window (user-triggered via "Float" button)
+- [x] Session end / Expand → show main window, hide floating window
+- [x] "Minimize to floating" button in FocusOverlay
+- [x] `src/lib/urlUtils.ts` — URL extraction; auto-open on task activation
+- [x] `autoOpenLinks` setting + Settings toggle + link display in FocusOverlay
+- [x] `focusBackground` setting (dark/gradient-warm/gradient-cool/gradient-purple/nature)
+- [x] Background picker in Settings; applied in FocusOverlay
+- [x] `src/lib/audioManager.ts` + ambient sound assets in `public/sounds/`
+- [x] `focusSound` / `focusSoundVolume` settings; sound selector in FocusOverlay + Settings
 
-**Status**: NOT STARTED
+**Status**: COMPLETE (ambient MP3 files require manual placement in `public/sounds/`)
 
 ---
 

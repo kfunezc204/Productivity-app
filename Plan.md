@@ -340,42 +340,42 @@ CREATE TABLE task_tags (
 **Tasks:**
 
 #### Database
-- [ ] Migration `003_subtasks.sql`: `ALTER TABLE tasks ADD COLUMN parent_task_id TEXT REFERENCES tasks(id) ON DELETE CASCADE`
-- [ ] Add index: `CREATE INDEX idx_tasks_parent ON tasks(parent_task_id)`
-- [ ] Register migration in `src-tauri/src/lib.rs`
+- [x] Migration `003_subtasks.sql`: `ALTER TABLE tasks ADD COLUMN parent_task_id TEXT REFERENCES tasks(id) ON DELETE CASCADE`
+- [x] Add index: `CREATE INDEX idx_tasks_parent ON tasks(parent_task_id)`
+- [x] Register migration in `src-tauri/src/lib.rs`
 
 #### Data Layer (`src/lib/db.ts`)
-- [ ] Add `parent_task_id` to `TaskRow` type
-- [ ] Update `rowToTask()` mapping → `parentTaskId`
-- [ ] New: `getSubtasks(parentTaskId)` — SELECT where parent_task_id = ?
-- [ ] New: `createSubtask(parentTaskId, title)` — INSERT with parent_task_id
-- [ ] New: `toggleSubtask(id, completed)` — toggle done/undone
-- [ ] New: `deleteSubtask(id)` — DELETE single subtask
-- [ ] New: `reorderSubtasks(parentTaskId, updates)` — batch position update
-- [ ] Update `getAllTasks()` → add `WHERE parent_task_id IS NULL` to exclude subtasks from Kanban
+- [x] Add `parent_task_id` to `TaskRow` type
+- [x] Update `rowToTask()` mapping → `parentTaskId`
+- [x] New: `getSubtasks(parentTaskId)` — SELECT where parent_task_id = ?
+- [x] New: `createSubtask(parentTaskId, title)` — INSERT with parent_task_id
+- [x] New: `toggleSubtask(id, completed)` — toggle done/undone
+- [x] New: `deleteSubtask(id)` — DELETE single subtask
+- [x] New: `reorderSubtasks(parentTaskId, updates)` — batch position update
+- [x] Update `getAllTasks()` → add `WHERE parent_task_id IS NULL` to exclude subtasks from Kanban
 
 #### Store (`src/stores/taskStore.ts`)
-- [ ] Add `parentTaskId: string | null` to `Task` type
-- [ ] New state: `subtasks: Record<string, Task[]>` — keyed by parent task ID
-- [ ] New actions: `loadSubtasks(parentId)`, `addSubtask(parentId, title)`, `toggleSubtask(id, parentId)`, `deleteSubtask(id, parentId)`, `reorderSubtasks(parentId, orderedIds)`
-- [ ] New selector: `useSubtasks(parentId)` — returns subtasks for a given parent
-- [ ] New selector: `useSubtaskProgress(parentId)` — returns `{ done: number, total: number }`
-- [ ] Update `useTasksByColumn` to filter out tasks where `parentTaskId !== null`
-- [ ] Update `deleteTask` — CASCADE handles DB, but also clear subtasks from state
+- [x] Add `parentTaskId: string | null` to `Task` type
+- [x] New state: `subtasks: Record<string, Task[]>` — keyed by parent task ID
+- [x] New actions: `loadSubtasks(parentId)`, `addSubtask(parentId, title)`, `toggleSubtask(id, parentId)`, `deleteSubtask(id, parentId)`, `reorderSubtasks(parentId, orderedIds)`
+- [x] New selector: `useSubtasks(parentId)` — returns subtasks for a given parent
+- [x] New selector: `useSubtaskProgress(parentId)` — returns `{ done: number, total: number }`
+- [x] Update `useTasksByColumn` to filter out tasks where `parentTaskId !== null`
+- [x] Update `deleteTask` — CASCADE handles DB, but also clear subtasks from state
 - [ ] Update `completeTask` — auto-complete all subtasks when parent is completed
 
 #### UI — TaskCard (`src/components/tasks/TaskCard.tsx`)
-- [ ] Add subtask progress badge in meta row (e.g., "2/5 ✓") when task has subtasks
-- [ ] Use `useSubtaskProgress(task.id)` selector
-- [ ] Only show badge when total > 0
+- [x] Add subtask progress badge in meta row (e.g., "2/5 ✓") when task has subtasks
+- [x] Use `useSubtaskProgress(task.id)` selector
+- [x] Only show badge when total > 0
 
 #### UI — TaskDetailPanel (`src/components/tasks/TaskDetailPanel.tsx`)
-- [ ] Add subtask section between Recurrence and Notes
-- [ ] List subtasks with checkbox + title (inline edit on click)
-- [ ] "Add subtask" inline input at bottom of list
-- [ ] Delete button (X icon) on hover per subtask
-- [ ] Drag-to-reorder or up/down arrow buttons
-- [ ] Progress bar or fraction display at section header
+- [x] Add subtask section between Recurrence and Notes
+- [x] List subtasks with checkbox + title (inline edit on click)
+- [x] "Add subtask" inline input at bottom of list
+- [x] Delete button (X icon) on hover per subtask
+- [x] Drag-to-reorder or up/down arrow buttons
+- [x] Progress bar or fraction display at section header
 
 **Deliverable**: Tasks can have subtasks; subtask checkboxes work in detail panel; progress shown on cards.
 
@@ -388,28 +388,28 @@ CREATE TABLE task_tags (
 **Tasks:**
 
 #### Store Changes (`src/stores/taskStore.ts`)
-- [ ] Update `useTasksByColumn(status)` to accept or read `selectedListId` from `listStore`
-- [ ] When `selectedListId === null` → show all tasks (current behavior)
-- [ ] When `selectedListId !== null` → filter tasks by `listId === selectedListId`
-- [ ] Cross-store access: use `useListStore.getState().selectedListId` inside selector, or pass as parameter
+- [x] Update `useTasksByColumn(status)` to accept or read `selectedListId` from `listStore`
+- [x] When `selectedListId === null` → show all tasks (current behavior)
+- [x] When `selectedListId !== null` → filter tasks by `listId === selectedListId`
+- [x] Cross-store access: use `useListStore.getState().selectedListId` inside selector, or pass as parameter
 
 #### Kanban Board Header
-- [ ] Show current list name + color in board header area
-- [ ] When "All Tasks" selected → show "All Tasks" header
-- [ ] When specific list selected → show list name + icon
+- [x] Show current list name + color in board header area
+- [x] When "All Tasks" selected → show "All Tasks" header
+- [x] When specific list selected → show list name + icon
 
 #### Task Card Enhancement (`src/components/tasks/TaskCard.tsx`)
-- [ ] In "All Tasks" view: show list name label next to the color dot
-- [ ] In single-list view: hide list name label (color dot sufficient)
+- [x] In "All Tasks" view: show list name label next to the color dot
+- [x] In single-list view: hide list name label (color dot sufficient)
 
 #### Sidebar Polish (`src/components/layout/Sidebar.tsx`)
-- [ ] Ensure "All Tasks" has visual distinction (bold or different icon) when active
-- [ ] Show task count per list in sidebar
-- [ ] Show total task count next to "All Tasks"
+- [x] Ensure "All Tasks" has visual distinction (bold or different icon) when active
+- [x] Show task count per list in sidebar
+- [x] Show total task count next to "All Tasks"
 
 #### InlineTaskAdd (`src/components/tasks/InlineTaskAdd.tsx`)
-- [ ] When in "All Tasks" view and adding a task → show a list picker dropdown to choose which list
-- [ ] Default to "Inbox" if no list selected
+- [x] When in "All Tasks" view and adding a task → show a list picker dropdown to choose which list
+- [x] Default to "Inbox" if no list selected
 
 **Deliverable**: Clicking a list in the sidebar filters the board to that list's tasks; "All Tasks" shows everything.
 

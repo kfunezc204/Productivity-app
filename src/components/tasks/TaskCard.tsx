@@ -7,7 +7,7 @@ import { ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Play, Pencil } from 
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { useTaskStore, type Task, type TaskStatus } from "@/stores/taskStore";
+import { useTaskStore, useSubtaskProgress, type Task, type TaskStatus } from "@/stores/taskStore";
 import { useListStore } from "@/stores/listStore";
 import { useTimerStore } from "@/stores/timerStore";
 import { formatMinutes, parseEstimate } from "@/lib/timeUtils";
@@ -42,12 +42,16 @@ export default function TaskCard({ task, columnStatus, columnTasks }: Props) {
   const selectedTaskId = useTaskStore((s) => s.selectedTaskId);
   const { completeTask, updateTask, moveTask, reorderTasks, selectTask } = useTaskStore.getState();
   const lists = useListStore((s) => s.lists);
+  const selectedListId = useListStore((s) => s.selectedListId);
   const timerStatus = useTimerStore((s) => s.status);
   const activeTaskId = useTimerStore((s) => s.activeTaskId);
   const navigate = useNavigate();
   const isTimerActiveOnThis = timerStatus !== "idle" && activeTaskId === task.id;
 
   const list = lists.find((l) => l.id === task.listId);
+  const subtaskProgress = useSubtaskProgress(task.id);
+  const subtaskEstSum = useTaskStore((s) => s.subtaskCounts[task.id]?.estimatedMinutesSum ?? null);
+  const displayedEst = subtaskEstSum ?? task.estimatedMinutes;
 
   const isSelected = selectedTaskId === task.id;
 
@@ -61,8 +65,8 @@ export default function TaskCard({ task, columnStatus, columnTasks }: Props) {
 
   // Actual time badge color
   let actualBadgeClass = "bg-white/5 text-white/50";
-  if (task.estimatedMinutes && task.actualMinutes > 0) {
-    const ratio = task.actualMinutes / task.estimatedMinutes;
+  if (displayedEst && task.actualMinutes > 0) {
+    const ratio = task.actualMinutes / displayedEst;
     if (ratio <= 1.0) actualBadgeClass = "bg-green-500/20 text-green-400";
     else if (ratio <= 1.25) actualBadgeClass = "bg-yellow-500/20 text-yellow-400";
     else actualBadgeClass = "bg-red-500/20 text-red-400";
@@ -208,19 +212,24 @@ export default function TaskCard({ task, columnStatus, columnTasks }: Props) {
 
           {/* Meta row */}
           <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-            {/* List color dot */}
+            {/* List color dot + name (name only in All Tasks view) */}
             {list && (
-              <span
-                className="w-2 h-2 rounded-full flex-shrink-0"
-                style={{ backgroundColor: list.color }}
-                title={list.name}
-              />
+              <>
+                <span
+                  className="w-2 h-2 rounded-full flex-shrink-0"
+                  style={{ backgroundColor: list.color }}
+                  title={list.name}
+                />
+                {selectedListId === null && (
+                  <span className="text-[10px] text-white/30 truncate max-w-[60px]">{list.name}</span>
+                )}
+              </>
             )}
 
             {/* EST badge */}
-            {task.estimatedMinutes != null && (
+            {displayedEst != null && (
               <Badge variant="secondary" className="h-4 px-1.5 text-[10px] bg-white/5 text-white/50 border-0">
-                {formatMinutes(task.estimatedMinutes)}
+                {formatMinutes(displayedEst)}
               </Badge>
             )}
 
@@ -263,6 +272,20 @@ export default function TaskCard({ task, columnStatus, columnTasks }: Props) {
               <span className={`text-[10px] ${dueDateClass}`}>
                 {format(parseISO(task.dueDate), "MMM d")}
               </span>
+            )}
+
+            {/* Subtask progress badge */}
+            {subtaskProgress && (
+              <Badge
+                variant="secondary"
+                className={`h-4 px-1.5 text-[10px] border-0 ${
+                  subtaskProgress.done === subtaskProgress.total
+                    ? "bg-green-500/20 text-green-400"
+                    : "bg-white/5 text-white/50"
+                }`}
+              >
+                {subtaskProgress.done}/{subtaskProgress.total} ✓
+              </Badge>
             )}
           </div>
         </div>

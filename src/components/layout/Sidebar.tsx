@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { motion } from "framer-motion";
 import MiniTimer from "@/components/focus/MiniTimer";
 import { NavLink } from "react-router-dom";
@@ -9,18 +9,6 @@ import {
   Settings,
   Plus,
   MoreHorizontal,
-  Inbox,
-  Briefcase,
-  Home,
-  Star,
-  Heart,
-  BookOpen,
-  Code2,
-  Music,
-  Zap,
-  ShoppingCart,
-  Dumbbell,
-  Plane,
 } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import {
@@ -30,6 +18,8 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useListStore, type List } from "@/stores/listStore";
+import { useTaskStore } from "@/stores/taskStore";
+import { ListIcon } from "@/lib/iconMap";
 import ListDialog from "@/components/tasks/ListDialog";
 import DeleteListDialog from "@/components/tasks/DeleteListDialog";
 
@@ -40,25 +30,6 @@ const navItems = [
   { to: "/settings", icon: Settings, label: "Settings" },
 ];
 
-const ICON_MAP: Record<string, React.ElementType> = {
-  inbox: Inbox,
-  briefcase: Briefcase,
-  home: Home,
-  star: Star,
-  heart: Heart,
-  book: BookOpen,
-  code: Code2,
-  music: Music,
-  zap: Zap,
-  cart: ShoppingCart,
-  gym: Dumbbell,
-  travel: Plane,
-};
-
-function ListIcon({ icon, color }: { icon: string; color: string }) {
-  const Icon = ICON_MAP[icon] ?? Inbox;
-  return <Icon size={15} style={{ color }} className="flex-shrink-0" />;
-}
 
 export default function Sidebar() {
   const lists = useListStore((s) => s.lists);
@@ -67,6 +38,18 @@ export default function Sidebar() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingList, setEditingList] = useState<List | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<List | null>(null);
+
+  const tasks = useTaskStore((s) => s.tasks);
+  const taskCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    let total = 0;
+    for (const t of tasks) {
+      if (t.parentTaskId !== null) continue;
+      counts[t.listId] = (counts[t.listId] ?? 0) + 1;
+      total++;
+    }
+    return { counts, total };
+  }, [tasks]);
 
   function openCreate() {
     setEditingList(null);
@@ -110,6 +93,9 @@ export default function Sidebar() {
         >
           <LayoutDashboard size={15} className="flex-shrink-0" />
           <span className="truncate">All Tasks</span>
+          {taskCounts.total > 0 && (
+            <span className="text-[10px] text-white/30 tabular-nums ml-auto">{taskCounts.total}</span>
+          )}
         </button>
 
         {/* Dynamic lists */}
@@ -131,6 +117,9 @@ export default function Sidebar() {
             >
               <ListIcon icon={list.icon} color={list.color} />
               <span className="truncate">{list.name}</span>
+              {(taskCounts.counts[list.id] ?? 0) > 0 && (
+                <span className="text-[10px] text-white/30 tabular-nums ml-auto">{taskCounts.counts[list.id]}</span>
+              )}
             </button>
 
             <DropdownMenu>

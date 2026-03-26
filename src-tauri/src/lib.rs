@@ -20,6 +20,12 @@ pub fn run() {
             sql: include_str!("./migrations/002_blocker_profiles.sql"),
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 3,
+            description: "subtasks",
+            sql: include_str!("./migrations/003_subtasks.sql"),
+            kind: MigrationKind::Up,
+        },
     ];
 
     tauri::Builder::default()

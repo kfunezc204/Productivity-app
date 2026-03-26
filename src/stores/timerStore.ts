@@ -36,6 +36,10 @@ type TimerState = {
   completedIntervals: CompletedInterval[];
   isLoaded: boolean;
   activeLockerProfileId: string | null;
+  taskElapsedFocusSeconds: number;
+  activeSubtaskIndex: number;
+  activeSubtaskTitle: string | null;
+  isExtraTime: boolean;
 };
 
 type TimerActions = {
@@ -50,6 +54,8 @@ type TimerActions = {
   persistState: () => Promise<void>;
   loadPersistedTimer: () => Promise<void>;
   setLockerProfile: (profileId: string | null) => void;
+  broadcastCurrentState: () => Promise<void>;
+  initTimerActionListener: () => Promise<() => void>;
 };
 
 // Module-scoped interval — survives route changes (store is a singleton)
@@ -101,6 +107,31 @@ async function syncTaskActualMinutes(taskId: string | null) {
   useTaskStore.getState().updateTaskInMemory(taskId, { actualMinutes: total });
 }
 
+/** Compute stable title for the current active subtask. Only called at transition points. */
+function getActiveSubtaskTitle(taskId: string | null, index: number): string | null {
+  if (!taskId) return null;
+  const subs = useTaskStore.getState().subtasks[taskId] ?? [];
+  const sub = subs.find((s, i) => i >= index && s.completedAt === null);
+  return sub?.title ?? null;
+}
+
+/** Load subtasks for a task and return seeded elapsed/index to skip already-done ones. */
+async function seedSubtaskProgress(taskId: string): Promise<{ taskElapsedFocusSeconds: number; activeSubtaskIndex: number }> {
+  await useTaskStore.getState().loadSubtasks(taskId);
+  const subs = useTaskStore.getState().subtasks[taskId] ?? [];
+  let elapsed = 0;
+  let index = 0;
+  for (let i = 0; i < subs.length; i++) {
+    if (subs[i].completedAt !== null) {
+      elapsed += (subs[i].estimatedMinutes ?? 0) * 60;
+      index = i + 1;
+    } else {
+      break;
+    }
+  }
+  return { taskElapsedFocusSeconds: elapsed, activeSubtaskIndex: index };
+}
+
 async function deactivateLockerSafe() {
   try {
     await invoke("deactivate_locker");
@@ -121,6 +152,10 @@ export const useTimerStore = create<TimerState & TimerActions>((set, get) => ({
   completedIntervals: [],
   isLoaded: false,
   activeLockerProfileId: null,
+  taskElapsedFocusSeconds: 0,
+  activeSubtaskIndex: 0,
+  activeSubtaskTitle: null,
+  isExtraTime: false,
 
   startFocusSession: async (taskIds, lockerProfileId = null) => {
     if (taskIds.length === 0) return;
@@ -144,7 +179,17 @@ export const useTimerStore = create<TimerState & TimerActions>((set, get) => ({
       activeSessionId: sessionId,
       completedIntervals: [],
       activeLockerProfileId: lockerProfileId,
+      taskElapsedFocusSeconds: 0,
+      activeSubtaskIndex: 0,
+      isExtraTime: false,
     });
+
+    // Seed elapsed/index to skip already-completed subtasks
+    const seed = await seedSubtaskProgress(taskIds[0]);
+    if (seed.taskElapsedFocusSeconds > 0 || seed.activeSubtaskIndex > 0) {
+      set(seed);
+    }
+    set({ activeSubtaskTitle: getActiveSubtaskTitle(taskIds[0], seed.activeSubtaskIndex) });
 
     startInterval();
 
@@ -153,6 +198,7 @@ export const useTimerStore = create<TimerState & TimerActions>((set, get) => ({
     }
 
     await get().persistState();
+    await get().broadcastCurrentState();
   },
 
   tick: async () => {
@@ -169,18 +215,51 @@ export const useTimerStore = create<TimerState & TimerActions>((set, get) => ({
 
     set({ secondsRemaining: next });
 
-    // Auto-complete task when elapsed time reaches its estimate
-    if (state.phase === "focus" && state.activeTaskId) {
+    // Estimate tracking — only during focus phase
+    if (state.phase === "focus") {
+      const newElapsed = state.taskElapsedFocusSeconds + 1;
+      const updates: Partial<TimerState> = { taskElapsedFocusSeconds: newElapsed };
+
       const activeTask = useTaskStore.getState().tasks.find((t) => t.id === state.activeTaskId);
-      if (activeTask?.estimatedMinutes) {
-        const elapsedSeconds = state.totalSeconds - next;
-        if (elapsedSeconds >= activeTask.estimatedMinutes * 60) {
-          clearIntervalSafe();
-          await get().markDone();
-          return;
+      const subtaskList = state.activeTaskId
+        ? (useTaskStore.getState().subtasks[state.activeTaskId] ?? [])
+        : [];
+
+      if (subtaskList.length > 0) {
+        let cumulativeSeconds = 0;
+        let newIndex = subtaskList.length; // past all = extra time
+        for (let i = 0; i < subtaskList.length; i++) {
+          cumulativeSeconds += (subtaskList[i].estimatedMinutes ?? 0) * 60;
+          if (newElapsed <= cumulativeSeconds) {
+            newIndex = i;
+            break;
+          }
         }
+
+        if (newIndex > state.activeSubtaskIndex) {
+          for (let i = state.activeSubtaskIndex; i < Math.min(newIndex, subtaskList.length); i++) {
+            const sub = subtaskList[i];
+            if (sub.completedAt === null) {
+              useTaskStore.getState().toggleSubtask(state.activeTaskId!, sub.id);
+            }
+          }
+        }
+
+        const finalIndex = Math.min(newIndex, subtaskList.length);
+        updates.activeSubtaskIndex = finalIndex;
+        if (finalIndex !== state.activeSubtaskIndex) {
+          updates.activeSubtaskTitle = getActiveSubtaskTitle(state.activeTaskId, finalIndex);
+        }
+        const totalEstSec = subtaskList.reduce((s, t) => s + (t.estimatedMinutes ?? 0) * 60, 0);
+        updates.isExtraTime = totalEstSec > 0 && newElapsed > totalEstSec;
+      } else if (activeTask?.estimatedMinutes) {
+        updates.isExtraTime = newElapsed >= activeTask.estimatedMinutes * 60;
       }
+
+      set(updates);
     }
+
+    await get().broadcastCurrentState();
 
     if (next % 30 === 0) {
       await get().persistState();
@@ -205,6 +284,7 @@ export const useTimerStore = create<TimerState & TimerActions>((set, get) => ({
 
     set({ status: "paused", activeSessionId: null });
     await get().persistState();
+    await get().broadcastCurrentState();
   },
 
   resume: async () => {
@@ -218,6 +298,7 @@ export const useTimerStore = create<TimerState & TimerActions>((set, get) => ({
     set({ status: "running", activeSessionId: sessionId });
     startInterval();
     await get().persistState();
+    await get().broadcastCurrentState();
   },
 
   skip: async () => {
@@ -250,9 +331,18 @@ export const useTimerStore = create<TimerState & TimerActions>((set, get) => ({
           totalSeconds: total,
           activeSessionId: sessionId,
           status: "running",
+          taskElapsedFocusSeconds: 0,
+          activeSubtaskIndex: 0,
+          isExtraTime: false,
         });
+        const skipSeed = await seedSubtaskProgress(nextTask);
+        if (skipSeed.taskElapsedFocusSeconds > 0 || skipSeed.activeSubtaskIndex > 0) {
+          set(skipSeed);
+        }
+        set({ activeSubtaskTitle: getActiveSubtaskTitle(nextTask, skipSeed.activeSubtaskIndex) });
         startInterval();
         await get().persistState();
+        await get().broadcastCurrentState();
       } else {
         await get().endSession();
       }
@@ -276,6 +366,7 @@ export const useTimerStore = create<TimerState & TimerActions>((set, get) => ({
       });
       startInterval();
       await get().persistState();
+      await get().broadcastCurrentState();
     }
   },
 
@@ -292,8 +383,20 @@ export const useTimerStore = create<TimerState & TimerActions>((set, get) => ({
       return;
     }
 
-    set({ activeTaskId: nextTask, taskQueue: rest });
+    set({
+      activeTaskId: nextTask,
+      taskQueue: rest,
+      taskElapsedFocusSeconds: 0,
+      activeSubtaskIndex: 0,
+      isExtraTime: false,
+    });
+    const doneSeed = await seedSubtaskProgress(nextTask);
+    if (doneSeed.taskElapsedFocusSeconds > 0 || doneSeed.activeSubtaskIndex > 0) {
+      set(doneSeed);
+    }
+    set({ activeSubtaskTitle: getActiveSubtaskTitle(nextTask, doneSeed.activeSubtaskIndex) });
     await get().persistState();
+    await get().broadcastCurrentState();
   },
 
   nextPhase: async () => {
@@ -387,6 +490,7 @@ export const useTimerStore = create<TimerState & TimerActions>((set, get) => ({
 
     startInterval();
     await get().persistState();
+    await get().broadcastCurrentState();
   },
 
   endSession: async () => {
@@ -432,7 +536,22 @@ export const useTimerStore = create<TimerState & TimerActions>((set, get) => ({
       activeSessionId: null,
       completedIntervals: [],
       activeLockerProfileId: null,
+      taskElapsedFocusSeconds: 0,
+      activeSubtaskIndex: 0,
+      activeSubtaskTitle: null,
+      isExtraTime: false,
     });
+
+    await get().broadcastCurrentState();
+
+    // Return to main window if floating timer was showing
+    try {
+      const { hideFloatingTimer, showMainWindow } = await import("@/lib/windowManager");
+      await hideFloatingTimer();
+      await showMainWindow();
+    } catch (e) {
+      console.warn("Window management after endSession failed:", e);
+    }
   },
 
   persistState: async () => {
@@ -447,13 +566,14 @@ export const useTimerStore = create<TimerState & TimerActions>((set, get) => ({
         setSetting("timer_task_queue", JSON.stringify(state.taskQueue)),
         setSetting("timer_last_tick_at", new Date().toISOString()),
         setSetting("timer_active_session_id", state.activeSessionId ?? ""),
+        setSetting("timer_task_elapsed_focus_seconds", String(state.taskElapsedFocusSeconds)),
       ].map((p) => p.catch(() => {}))
     );
   },
 
   loadPersistedTimer: async () => {
     try {
-      const [statusVal, phaseVal, secRemVal, cycleVal, taskIdVal, queueVal, lastTickVal] =
+      const [statusVal, phaseVal, secRemVal, cycleVal, taskIdVal, queueVal, lastTickVal, elapsedVal] =
         await Promise.all([
           getSetting("timer_status"),
           getSetting("timer_phase"),
@@ -462,6 +582,7 @@ export const useTimerStore = create<TimerState & TimerActions>((set, get) => ({
           getSetting("timer_active_task_id"),
           getSetting("timer_task_queue"),
           getSetting("timer_last_tick_at"),
+          getSetting("timer_task_elapsed_focus_seconds"),
         ]);
 
       set({ isLoaded: true });
@@ -482,6 +603,7 @@ export const useTimerStore = create<TimerState & TimerActions>((set, get) => ({
       const activeTaskId = taskIdVal || null;
       const currentCycle = cycleVal ? parseInt(cycleVal) : 1;
       const totalSeconds = getPhaseSeconds(phase);
+      const taskElapsedFocusSeconds = elapsedVal ? parseInt(elapsedVal) : 0;
 
       set({
         phase,
@@ -492,7 +614,36 @@ export const useTimerStore = create<TimerState & TimerActions>((set, get) => ({
         activeTaskId,
         taskQueue,
         activeSessionId: null,
+        taskElapsedFocusSeconds,
       });
+
+      // Recompute activeSubtaskIndex and isExtraTime from restored elapsed
+      if (activeTaskId && taskElapsedFocusSeconds > 0) {
+        try {
+          await useTaskStore.getState().loadSubtasks(activeTaskId);
+          const subtaskList = useTaskStore.getState().subtasks[activeTaskId] ?? [];
+          if (subtaskList.length > 0) {
+            let cumSec = 0;
+            let idx = subtaskList.length;
+            for (let i = 0; i < subtaskList.length; i++) {
+              cumSec += (subtaskList[i].estimatedMinutes ?? 0) * 60;
+              if (taskElapsedFocusSeconds <= cumSec) {
+                idx = i;
+                break;
+              }
+            }
+            const totalEstSec = subtaskList.reduce((s, t) => s + (t.estimatedMinutes ?? 0) * 60, 0);
+            const restoredIndex = Math.min(idx, subtaskList.length);
+            set({
+              activeSubtaskIndex: restoredIndex,
+              activeSubtaskTitle: getActiveSubtaskTitle(activeTaskId, restoredIndex),
+              isExtraTime: totalEstSec > 0 && taskElapsedFocusSeconds > totalEstSec,
+            });
+          }
+        } catch (e) {
+          console.warn("Could not restore subtask index:", e);
+        }
+      }
 
       // Auto-resume if was running
       if (status === "running" && secondsRemaining > 0) {
@@ -511,5 +662,83 @@ export const useTimerStore = create<TimerState & TimerActions>((set, get) => ({
 
   setLockerProfile: (profileId) => {
     set({ activeLockerProfileId: profileId });
+  },
+
+  broadcastCurrentState: async () => {
+    try {
+      const state = get();
+      const activeTask = state.activeTaskId
+        ? useTaskStore.getState().tasks.find((t) => t.id === state.activeTaskId)
+        : null;
+      const subtaskList = state.activeTaskId
+        ? (useTaskStore.getState().subtasks[state.activeTaskId] ?? [])
+        : [];
+
+      // Use stored stable title — never re-derive from mutable subtask array on every tick
+      const currentSubtaskTitle = state.activeSubtaskTitle;
+
+      // Elapsed within current subtask (numeric — no flicker concern)
+      let currentSubtaskElapsedSeconds = 0;
+      const idx = state.activeSubtaskIndex;
+      if (currentSubtaskTitle !== null && idx < subtaskList.length) {
+        let preceding = 0;
+        for (let i = 0; i < idx; i++) {
+          preceding += (subtaskList[i].estimatedMinutes ?? 0) * 60;
+        }
+        currentSubtaskElapsedSeconds = Math.max(0, state.taskElapsedFocusSeconds - preceding);
+      }
+
+      const currentSubtaskEstimateSeconds =
+        currentSubtaskTitle !== null && idx < subtaskList.length && subtaskList[idx]?.estimatedMinutes
+          ? subtaskList[idx].estimatedMinutes! * 60
+          : null;
+
+      const doneCount = subtaskList.filter((s) => s.completedAt !== null).length;
+
+      const { broadcastTimerState } = await import("@/lib/timerBridge");
+      await broadcastTimerState({
+        phase: state.phase,
+        status: state.status,
+        secondsRemaining: state.secondsRemaining,
+        totalSeconds: state.totalSeconds,
+        currentCycle: state.currentCycle,
+        activeTaskId: state.activeTaskId,
+        activeTaskTitle: activeTask?.title ?? null,
+        cyclesBeforeLong: useSettingsStore.getState().pomodoroCyclesBeforeLongBreak,
+        taskEstimateSeconds: activeTask?.estimatedMinutes ? activeTask.estimatedMinutes * 60 : null,
+        taskElapsedFocusSeconds: state.taskElapsedFocusSeconds,
+        isExtraTime: state.isExtraTime,
+        currentSubtaskTitle,
+        currentSubtaskEstimateSeconds,
+        currentSubtaskElapsedSeconds,
+        subtaskProgress: subtaskList.length > 0 ? { done: doneCount, total: subtaskList.length } : null,
+      });
+    } catch {
+      // Broadcast failures are non-critical — ignore
+    }
+  },
+
+  initTimerActionListener: async () => {
+    const { onTimerAction } = await import("@/lib/timerBridge");
+    const unlisten = await onTimerAction(async (action) => {
+      const store = useTimerStore.getState();
+      switch (action) {
+        case "pause":   await store.pause();   break;
+        case "resume":  await store.resume();  break;
+        case "skip":    await store.skip();    break;
+        case "done":    await store.markDone(); break;
+        case "exit":    await store.endSession(); break;
+        case "expand": {
+          try {
+            const { expandToMain } = await import("@/lib/windowManager");
+            await expandToMain();
+          } catch (e) {
+            console.warn("expandToMain failed:", e);
+          }
+          break;
+        }
+      }
+    });
+    return unlisten;
   },
 }));

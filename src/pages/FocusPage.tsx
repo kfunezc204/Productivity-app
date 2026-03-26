@@ -3,6 +3,7 @@ import { Play, ChevronUp, ChevronDown, ShieldCheck, Timer as TimerIcon } from "l
 import { Button } from "@/components/ui/button";
 import { useTimerStore } from "@/stores/timerStore";
 import { useTaskStore, useTasksByColumn } from "@/stores/taskStore";
+import { useListStore } from "@/stores/listStore";
 import { useLockerStore } from "@/stores/lockerStore";
 import { useSettingsStore } from "@/stores/settingsStore";
 import FocusOverlay from "@/components/focus/FocusOverlay";
@@ -90,7 +91,8 @@ export default function FocusPage() {
   const status = useTimerStore((s) => s.status);
   const { startFocusSession, endSession } = useTimerStore.getState();
 
-  const todayTasks = useTasksByColumn("today");
+  const selectedListId = useListStore((s) => s.selectedListId);
+  const todayTasks = useTasksByColumn("today", selectedListId);
   const profiles = useLockerStore((s) => s.profiles);
   const { loadProfiles, isLoaded: lockerLoaded } = useLockerStore.getState();
   const pomodoroFocusMinutes = useSettingsStore((s) => s.pomodoroFocusMinutes);
@@ -103,10 +105,11 @@ export default function FocusPage() {
     if (!lockerLoaded) loadProfiles();
   }, [lockerLoaded, loadProfiles]);
 
-  // Pre-select all today tasks
+  // Pre-select all today tasks (re-run when list changes or tasks change)
+  const todayTaskIds = todayTasks.map((t) => t.id).join(",");
   useEffect(() => {
     setSelectedIds(todayTasks.map((t) => t.id));
-  }, [todayTasks.length]);  // eslint-disable-line
+  }, [todayTaskIds]);  // eslint-disable-line
 
   // When running/paused, show overlay
   if (status !== "idle") {

@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { Routes, Route } from "react-router-dom";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import AppShell from "@/components/layout/AppShell";
@@ -7,6 +7,7 @@ import BoardPage from "@/pages/BoardPage";
 import FocusPage from "@/pages/FocusPage";
 import ReportsPage from "@/pages/ReportsPage";
 import SettingsPage from "@/pages/SettingsPage";
+import FloatingTimerPage from "@/pages/FloatingTimerPage";
 import { useSettingsStore } from "@/stores/settingsStore";
 import { useTimerStore } from "@/stores/timerStore";
 
@@ -14,11 +15,27 @@ export default function App() {
   const isLoaded = useSettingsStore((s) => s.isLoaded);
   const onboardingCompleted = useSettingsStore((s) => s.onboardingCompleted);
 
+  const actionListenerCleanup = useRef<(() => void) | null>(null);
+
   // Empty deps: run once on mount via getState() — avoids Zustand v5 reference instability
   useEffect(() => {
     useSettingsStore.getState().loadSettings().then(() => {
-      useTimerStore.getState().loadPersistedTimer();
+      // Only the main window runs the timer — floating window is a passive display
+      if (window.location.pathname !== "/floating-timer") {
+        useTimerStore.getState().loadPersistedTimer();
+      }
     });
+
+    // Only the main window listens for timer actions from the floating window
+    if (window.location.pathname !== "/floating-timer") {
+      useTimerStore.getState().initTimerActionListener().then((unlisten) => {
+        actionListenerCleanup.current = unlisten;
+      });
+    }
+
+    return () => {
+      actionListenerCleanup.current?.();
+    };
   }, []);
 
   if (!isLoaded) {
@@ -36,6 +53,8 @@ export default function App() {
     <TooltipProvider>
       {!onboardingCompleted && <OnboardingModal />}
       <Routes>
+        {/* Floating timer window — outside AppShell, no sidebar/titlebar */}
+        <Route path="/floating-timer" element={<FloatingTimerPage />} />
         <Route element={<AppShell />}>
           <Route path="/" element={<BoardPage />} />
           <Route path="/focus" element={<FocusPage />} />

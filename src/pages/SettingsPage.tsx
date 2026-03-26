@@ -73,6 +73,10 @@ export default function SettingsPage() {
     notificationsEnabled,
     weekStart,
     lockerDuringBreaks,
+    focusBackground,
+    focusSound,
+    focusSoundVolume,
+    autoOpenLinks,
     setTheme,
     setPomodoroFocusMinutes,
     setPomodoroShortBreakMinutes,
@@ -82,6 +86,10 @@ export default function SettingsPage() {
     setNotificationsEnabled,
     setWeekStart,
     setLockerDuringBreaks,
+    setFocusBackground,
+    setFocusSound,
+    setFocusSoundVolume,
+    setAutoOpenLinks,
   } = useSettingsStore();
 
   const [shortcutModalOpen, setShortcutModalOpen] = useState(false);
@@ -287,8 +295,90 @@ export default function SettingsPage() {
           </SettingCard>
         </motion.div>
 
-        {/* Keyboard Shortcuts */}
+        {/* Focus Mode */}
         <motion.div variants={fadeUp} initial="hidden" animate="visible" custom={6}>
+          <SectionHeader title="Focus Mode" />
+          <SettingCard>
+            <SettingRow label="Focus Background" description="Background style during focus sessions">
+              <Select
+                value={focusBackground}
+                onValueChange={async (val) => {
+                  if (val) await setFocusBackground(val);
+                  toast.success("Settings updated");
+                }}
+              >
+                <SelectTrigger className="w-40 h-8 text-sm bg-[#111] border-[#2A2A2A] text-white">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="bg-[#1A1A1A] border-[#2A2A2A] text-white">
+                  <SelectItem value="dark" className="focus:bg-white/10 focus:text-white">Dark</SelectItem>
+                  <SelectItem value="gradient-warm" className="focus:bg-white/10 focus:text-white">Warm Gradient</SelectItem>
+                  <SelectItem value="gradient-cool" className="focus:bg-white/10 focus:text-white">Cool Gradient</SelectItem>
+                  <SelectItem value="gradient-purple" className="focus:bg-white/10 focus:text-white">Purple Gradient</SelectItem>
+                  <SelectItem value="nature" className="focus:bg-white/10 focus:text-white">Nature</SelectItem>
+                </SelectContent>
+              </Select>
+            </SettingRow>
+
+            <SettingRow label="Ambient Sound" description="Background audio during focus sessions">
+              <Select
+                value={focusSound}
+                onValueChange={async (val) => {
+                  if (val) await setFocusSound(val);
+                  toast.success("Settings updated");
+                }}
+              >
+                <SelectTrigger className="w-40 h-8 text-sm bg-[#111] border-[#2A2A2A] text-white">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="bg-[#1A1A1A] border-[#2A2A2A] text-white">
+                  <SelectItem value="none" className="focus:bg-white/10 focus:text-white">None</SelectItem>
+                  <SelectItem value="rain" className="focus:bg-white/10 focus:text-white">Rain</SelectItem>
+                  <SelectItem value="cafe" className="focus:bg-white/10 focus:text-white">Cafe</SelectItem>
+                  <SelectItem value="whitenoise" className="focus:bg-white/10 focus:text-white">White Noise</SelectItem>
+                  <SelectItem value="lofi" className="focus:bg-white/10 focus:text-white">Lo-fi</SelectItem>
+                </SelectContent>
+              </Select>
+            </SettingRow>
+
+            {focusSound !== "none" && (
+              <SettingRow
+                label="Sound Volume"
+                description={`${focusSoundVolume}%`}
+              >
+                <div className="w-40">
+                  <Slider
+                    min={0}
+                    max={100}
+                    step={5}
+                    value={[focusSoundVolume]}
+                    onValueChange={async (v) => {
+                      await setFocusSoundVolume(sliderVal(v));
+                      debouncedToast();
+                    }}
+                    className="w-full"
+                  />
+                </div>
+              </SettingRow>
+            )}
+
+            <SettingRow
+              label="Auto-open Task Links"
+              description="Open URLs from task title when focus starts"
+            >
+              <Switch
+                checked={autoOpenLinks}
+                onCheckedChange={async (checked) => {
+                  await setAutoOpenLinks(checked);
+                  toast.success("Settings updated");
+                }}
+              />
+            </SettingRow>
+          </SettingCard>
+        </motion.div>
+
+        {/* Keyboard Shortcuts */}
+        <motion.div variants={fadeUp} initial="hidden" animate="visible" custom={7}>
           <SectionHeader title="Keyboard Shortcuts" />
           <SettingCard>
             <SettingRow
@@ -308,7 +398,7 @@ export default function SettingsPage() {
         </motion.div>
 
         {/* Account */}
-        <motion.div variants={fadeUp} initial="hidden" animate="visible" custom={7}>
+        <motion.div variants={fadeUp} initial="hidden" animate="visible" custom={8}>
           <SectionHeader title="Account" />
           <SettingCard>
             <div className="px-4 py-3">
@@ -320,7 +410,7 @@ export default function SettingsPage() {
         </motion.div>
 
         {/* About */}
-        <motion.div variants={fadeUp} initial="hidden" animate="visible" custom={8}>
+        <motion.div variants={fadeUp} initial="hidden" animate="visible" custom={9}>
           <SectionHeader title="About" />
           <SettingCard>
             <SettingRow label="BlitzDesk" description="v0.1.0">
